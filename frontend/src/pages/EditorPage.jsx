@@ -246,6 +246,9 @@ export default function EditorPage() {
           <Link className="btn" to={`/projects/${id}/speakers`}>
             🏷️ 说话人归一
           </Link>
+          <Link className="btn" to={`/projects/${id}/excerpts`}>
+            ✂️ 摘录包
+          </Link>
           <Link className="btn" to={`/projects/${id}/rules`}>
             ⚙️ 规则批量标注
           </Link>

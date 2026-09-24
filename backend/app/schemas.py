@@ -89,6 +89,26 @@ class QuoteSearchRequest(BaseModel):
     document: DocumentIn | None = None
 
 
+# ---------- excerpt packs (摘录包) ----------
+
+class ExcerptRangeIn(BaseModel):
+    """One user-entered [start, end) range; order is free and overlaps merge."""
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+    note: str = ""
+
+
+class ExcerptPackRequest(BaseModel):
+    """Preview / export an excerpt pack built from time ranges.
+
+    ``document`` may carry the editor's current (possibly unsaved) document;
+    otherwise the saved project document is used. The project is never
+    modified.
+    """
+    ranges: list[ExcerptRangeIn] = []
+    document: DocumentIn | None = None
+
+
 # ---------- speaker normalization ----------
 
 class SpeakerMappingIn(BaseModel):

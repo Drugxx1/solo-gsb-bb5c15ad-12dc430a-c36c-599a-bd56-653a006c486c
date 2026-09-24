@@ -3,16 +3,19 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import db, importer, quality, quotes, rules, speakers
+from . import db, excerpts, importer, quality, quotes, rules, speakers
 from .merge import merge_documents
 from .schemas import (
     DocumentIn,
+    ExcerptPackRequest,
     MergeRequest,
     ProjectIn,
     ProjectUpdate,
@@ -81,8 +84,6 @@ def remove_project(project_id: str):
 
 @app.get("/api/projects/{project_id}/export")
 def export_project(project_id: str):
-    from urllib.parse import quote
-
     project = _get_or_404(project_id)
     fname = quote(f"{project['name']}-annotations.json")
     return JSONResponse(
@@ -192,6 +193,47 @@ def quote_search(project_id: str, payload: QuoteSearchRequest) -> dict:
     result["projectId"] = project_id
     result["projectName"] = project["name"]
     return result
+
+
+# ---------- excerpt packs (摘录包) ----------
+
+def _build_excerpt_pack(project_id: str, payload: ExcerptPackRequest) -> dict:
+    """Compute the excerpt-pack envelope (read-only; project never changes)."""
+    project = _get_or_404(project_id)
+    document = _doc(payload.document) if payload.document is not None \
+        else project["document"]
+    raw_ranges = [r.model_dump() for r in payload.ranges]
+    try:
+        pack = excerpts.build_excerpt(document, raw_ranges)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "projectId": project_id,
+        "projectName": project["name"],
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        **pack,
+    }
+
+
+@app.post("/api/projects/{project_id}/excerpt-pack/preview")
+def excerpt_pack_preview(project_id: str, payload: ExcerptPackRequest) -> dict:
+    """Preview merged ranges, included segments, clipped annotations, exclusions."""
+    return _build_excerpt_pack(project_id, payload)
+
+
+@app.post("/api/projects/{project_id}/excerpt-pack/download")
+def excerpt_pack_download(project_id: str, payload: ExcerptPackRequest):
+    """Download the excerpt pack JSON. The original project is untouched."""
+    pack = _build_excerpt_pack(project_id, payload)
+    fname = quote(f"{pack['projectName']}-摘录包.json")
+    return JSONResponse(
+        content=pack,
+        media_type="application/json",
+        headers={
+            "Content-Disposition":
+                f"attachment; filename=excerpt-pack.json; filename*=UTF-8''{fname}"
+        },
+    )
 
 
 # ---------- speaker normalization workbench ----------

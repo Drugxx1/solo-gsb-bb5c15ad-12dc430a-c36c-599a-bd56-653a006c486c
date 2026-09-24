@@ -103,4 +103,32 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ mappings }),
     }),
+
+  // ----- excerpt packs (摘录包) -----
+  previewExcerptPack: (projectId, { ranges, document = null }) =>
+    request(`/projects/${projectId}/excerpt-pack/preview`, {
+      method: 'POST',
+      body: JSON.stringify({ ranges, document }),
+    }),
+  excerptPackDownload: async (projectId, { ranges, document = null }) => {
+    const res = await fetch(
+      `${BASE}/projects/${projectId}/excerpt-pack/download`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ranges, document }),
+      })
+    if (!res.ok) {
+      const text = await res.text()
+      let detail = `下载失败 (${res.status})`
+      try { detail = JSON.parse(text).detail || detail } catch { /* keep */ }
+      throw new Error(detail)
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'excerpt-pack.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  },
 };

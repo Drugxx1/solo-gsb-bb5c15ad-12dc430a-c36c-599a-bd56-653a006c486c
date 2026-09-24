@@ -19,7 +19,11 @@
 空目标与循环映射会被阻止），确认前预览每个名称的最终去向及受影响的
 片段 / 校注 / 规则数量，确认后在一次事务中改写三处说话人字段（记录 ID
 与其他内容不变，失败不留部分修改），随后返回编辑页，引语检索与发言时长
-立即使用新名称。
+立即使用新名称。项目编辑页还可进入**摘录包**工作台：输入多段起止时间
+（顺序不限、允许重叠），预览时自动合并相交或首尾相接的区间，只收录完整
+落在合并区间内的转写片段（跨界片段整条列为排除项），校注按边界裁剪、
+跨越多个不相连区间时拆成多条并保留原校注 ID 作为来源标识，确认后下载
+JSON，原项目不被修改。
 
 - 前端：React 18 + Vite（纯 CSS，无 UI 框架依赖）
 - 后端：FastAPI（Python 3.11）
@@ -41,8 +45,11 @@ docker compose up -d --build
 > **http://localhost:8000**
 
 在首页打开任一项目即进入项目编辑页（`/projects/{id}`），时间轴下方依次是
-「发言时长」面板与「引语检索」面板；更换访问端口只需调整 Compose / `-p`
-端口映射（容器内固定监听 8000）。
+「发言时长」面板与「引语检索」面板；页头可进入「🧪 校注质检」
+（`/projects/{id}/quality`）、「🏷️ 说话人归一」（`/projects/{id}/speakers`）、
+「⚙️ 规则批量标注」（`/projects/{id}/rules`）与「✂️ 摘录包」
+（`/projects/{id}/excerpts`，如 **http://localhost:8000/projects/{id}/excerpts**）；
+更换访问端口只需调整 Compose / `-p` 端口映射（容器内固定监听 8000）。
 
 停止：
 
@@ -323,6 +330,46 @@ JSON 消费方）。重新导入导出的 JSON 时，这些校注按普通校注
    页并重新读取项目**，「引语检索」的说话人过滤与「发言时长」统计
    立即使用新名称。
 
+### 9. 摘录包
+
+在项目编辑页点击「✂️ 摘录包」进入摘录包工作台，路由
+`/projects/{id}/excerpts`，访问地址
+**http://localhost:8000/projects/{id}/excerpts**（端口随 Compose /
+`-p` 映射调整，容器内固定 8000）。摘录包用于从整份转写中切出指定时间
+范围内的片段与校注，**全程只读：预览与下载都不会修改原项目**。
+
+1. **输入区间**：在页面填写多段**起止时间（秒）**，每行可附备注；
+   行数不限、**输入顺序不限、区间允许重叠或首尾相接**，空白行自动忽略。
+   结束时间不晚于开始时间等非法输入会在前端 / 后端被拦截（绕过前端
+   直接调 API 同样返回 400）。
+2. **预览合并**：点击「🔍 生成预览」后，后端把相交或首尾相接
+   （`a.end == b.start`）的输入区间**合并成互不相连的合并区间**
+   （输入行的备注随合并保留），统计条显示输入区间数、合并后区间数、
+   收录片段数、裁剪 / 拆分后的校注数与排除片段数。
+3. **收录规则（避免跨界误收）**：
+   - 转写片段只有**完整落在某个合并区间内**（`seg.start ≥ r.start`
+     且 `seg.end ≤ r.end`，半开区间）才会被收录；
+   - 与区间相交但跨出边界的片段（如片段 `[5,15)`、区间 `[10,20)`）
+     **整条列为「排除项」**，绝不把它的全文误当成摘录内容；排除项按
+     区间列出并标注其跨越的区间序号，顶层 `excludedSegments` 中同一片段
+     只出现一次；
+   - 仅在端点相触、没有实际时间重叠的片段既不收录也不算跨界。
+4. **校注裁剪与拆分**：校注与摘录区间相交时**按相交边界裁剪**；
+   **一条校注跨越多个互不相连的合并区间时拆成多条**，每条都保留
+   **原校注 ID 作为来源标识**（`sourceAnnotationId`），并取得摘录包内
+   的新 ID（`excerpt-<原ID>-1/2/…`；完全内含、无需裁剪的单条沿用
+   原 ID），其余字段（说话人、主题、备注、颜色、规则溯源等）原样保留，
+   另带 `clipped`、`part / partCount` 标记。
+5. **预览明细**：每个合并区间独立成块，展示区间时长、收录片段表
+   （时间 / 说话人 / 原文）、裁剪后的校注卡片（含来源校注 ID 与
+   「裁剪」「拆分 n/m」标记）、校注与排除项数量，以及该区间的排除项
+   清单。
+6. **确认下载**：点击「⬇️ 确认并下载摘录包 JSON」即通过后端重新计算并
+   以附件形式下载（`Content-Disposition: attachment`）。JSON 含项目
+   标识与生成时间、合并区间（含备注）、逐区间明细、收录片段、裁剪 /
+   拆分后的校注（含来源标识）、排除片段与汇总统计；**原项目内容保持
+   不变**（下载基于当前**已保存**的项目文档）。
+
 ---
 
 ## 合并规则说明
@@ -374,6 +421,8 @@ JSON 消费方）。重新导入导出的 JSON 时，这些校注按普通校注
 | POST | `/api/projects/{id}/quote-search` | 引语检索（短语 + 可选说话人，可跨时间相接的同说话人片段） |
 | POST | `/api/projects/{id}/speaker-rename/preview` | 说话人归一预览：汇总现有名称，给出每个名称的最终去向与影响数量 |
 | POST | `/api/projects/{id}/speaker-rename` | 说话人归一提交：一次事务改写片段 / 校注 / 规则三处说话人字段 |
+| POST | `/api/projects/{id}/excerpt-pack/preview` | 摘录包预览：合并区间、收录片段、裁剪 / 拆分校注、列出排除项（只读） |
+| POST | `/api/projects/{id}/excerpt-pack/download` | 下载摘录包 JSON（附件），原项目不被修改 |
 | POST | `/api/projects/{id}/quality-check` | 校注质检（越界 / 重叠 / 说话人不一致），结果自动存入扫描历史，见下 |
 | GET | `/api/projects/{id}/quality-scans` | 项目的扫描历史（时间倒序，含窗口 / 统计，不含问题明细） |
 | GET | `/api/projects/{id}/quality-scans/{scanId}` | 读取某次扫描的完整问题快照 |
@@ -520,6 +569,88 @@ JSON 消费方）。重新导入导出的 JSON 时，这些校注按普通校注
 
 项目不存在返回 404。
 
+### `POST /api/projects/{id}/excerpt-pack/preview` 与 `…/excerpt-pack/download`
+
+摘录包。两个端点接收相同的请求体——一组起止时间区间（顺序不限、允许
+重叠或首尾相接）：
+
+```json
+{
+  "ranges": [
+    {"start": 0.0, "end": 60.0, "note": "开场"},
+    {"start": 55.0, "end": 120.0}
+  ],
+  "document": { "segments": [], "annotations": [] }
+}
+```
+
+- `ranges` 至少一条；`start / end` 必须为非负数且 `end > start`
+  （容差 1e-6），否则返回 **400**（`start` 为负由 Pydantic 返回 422）；
+- `document` 可选，传入时基于该文档计算（与引语检索一致，可携带编辑页
+  **未保存**的内容），省略时使用已保存的项目文档；
+- 两个端点都是**只读**的，不会写回或修改项目。
+
+`preview` 返回计算结果（JSON），`download` 以**附件**形式
+（`Content-Disposition: attachment; filename=excerpt-pack.json;
+filename*=UTF-8''…摘录包.json`）返回同样结构，浏览器直接触发下载：
+
+```json
+{
+  "projectId": "proj-…",
+  "projectName": "访谈A",
+  "createdAt": "2026-09-24T10:06:41.389034+00:00",
+  "inputRangeCount": 2,
+  "ranges": [
+    {"start": 0.0, "end": 120.0, "notes": ["开场"]}
+  ],
+  "summary": {
+    "inputRanges": 2, "mergedRanges": 1,
+    "segments": 6, "annotations": 3, "excludedSegments": 1
+  },
+  "segments": [
+    {"id": "seg-…", "start": 0.0, "end": 12.0,
+     "speaker": "受访者", "text": "…"}
+  ],
+  "annotations": [
+    {"id": "ann-9", "start": 10.0, "end": 60.0,
+     "speaker": "受访者", "topic": "…", "note": "…",
+     "sourceAnnotationId": "ann-9", "clipped": true,
+     "part": 1, "partCount": 1}
+  ],
+  "excludedSegments": [
+    {"id": "seg-x", "start": 115.0, "end": 130.0,
+     "speaker": "访谈者", "text": "…",
+     "reason": "crosses_interval_boundary", "intervalIndexes": [0]}
+  ],
+  "intervals": [
+    {
+      "index": 0, "start": 0.0, "end": 120.0, "notes": ["开场"],
+      "segments": ["…完整收录的片段对象…"],
+      "segmentCount": 6,
+      "annotations": ["…裁剪 / 拆分后的校注对象…"],
+      "annotationCount": 3,
+      "excludedSegmentIds": ["seg-x"],
+      "excludedCount": 1
+    }
+  ]
+}
+```
+
+收录与裁剪规则：
+
+1. 相交或首尾相接的输入区间先合并为 `ranges`（备注去重保留）；
+2. **只有完整落在某个合并区间内的片段**进入 `segments` /
+   `intervals[].segments`；跨界片段不收录其全文，整条进入
+   `excludedSegments`（`reason` 固定为 `crosses_interval_boundary`，
+   `intervalIndexes` 标出它跨越的合并区间序号），并在每个相关区间的
+   `excludedSegmentIds` 中引用其 id；仅端点相触（零时长重叠）不算跨界；
+3. 校注按相交部分裁剪；跨越 N 个不相连区间的校注拆成 N 条，
+   `part / partCount` 从 1 编号，每条都带原校注 ID
+   `sourceAnnotationId`，新 ID 形如 `excerpt-<原ID>-<序号>`；完全内含
+   且未裁剪的单条沿用原 ID 且 `clipped: false`。
+
+项目不存在返回 404。
+
 ### `POST /api/projects/{id}/quality-check`
 
 对**已保存**的项目文档做质检。请求体可省略（或为 `{}`），表示整条转写；
@@ -652,7 +783,7 @@ npm run dev
 cd backend
 python -m pytest test_merge.py test_rules_api.py test_quality.py \
   test_quality_api.py test_quality_scans_api.py test_quotes_api.py \
-  test_speakers_api.py -q
+  test_speakers_api.py test_excerpts_api.py -q
 ```
 
 测试覆盖：互不重叠改动自动合并、同字段/不同字段冲突、字段级裁决、
@@ -675,7 +806,15 @@ TestClient）；**质检引擎**另有 16 个扫描线算法单测（越界首�
 三处来源的名称汇总（纯空白忽略）、链式映射归并、空目标 / 空旧名 / 重复
 旧名 / 直接与间接循环映射的 400 拦截、确认后片段 / 校注 / 规则三处同时
 改写且记录 ID 与其余字段（含规则溯源）保留、归一后引语检索按新说话人
-命中，以及写入中途失败时事务整体回滚不留部分修改。
+命中，以及写入中途失败时事务整体回滚不留部分修改；
+**摘录包**用例（`test_excerpts_api.py`）覆盖区间合并且顺序无关
+（重叠 / 首尾相接 / 备注归并）、非法区间（空、`end ≤ start`、负数、
+非数字）400、只收录完整落入片段、跨界片段整条排除（零重叠相触不算）、
+排除片段跨多区间去重并记录区间序号、校注单区间裁剪保留 `note` 等其余
+字段、跨多个不相连区间拆成多条并保留 `sourceAnnotationId` 来源标识与
+`part/partCount`、完全内含沿用原 ID、下载附件头与逐区间计数、携带未保存
+文档、预览与下载后原项目文档保持不变、未知项目 404，以及输入文档不被
+修改。
 
 ---
 
@@ -692,6 +831,7 @@ TestClient）；**质检引擎**另有 16 个扫描线算法单测（越界首�
 │   │   ├── rules.py         # 规则匹配、区间合并、应用规划（plan_apply）
 │   │   ├── quality.py       # 质检扫描线：越界 / 重叠 / 说话人不一致
 │   │   ├── quotes.py        # 引语检索：同说话人相接片段链接、忽略空白与逐字映射
+│   │   ├── excerpts.py      # 摘录包：区间合并、片段完整收录 / 跨界排除、校注裁剪与拆分
 │   │   ├── speakers.py      # 说话人归一：名称汇总、链式映射归并与循环检测
 │   │   ├── importer.py      # 转写稿解析（纯文本 / JSON）
 │   │   ├── db.py            # SQLite 持久化（项目 / 规则 / 应用记录 / 质检扫描历史 / 说话人归一事务）
@@ -703,10 +843,11 @@ TestClient）；**质检引擎**另有 16 个扫描线算法单测（越界首�
 │   ├── test_quality_scans_api.py  # 质检扫描历史与两次扫描对比 API 测试
 │   ├── test_quotes_api.py   # 引语检索引擎与 API 测试
 │   ├── test_speakers_api.py # 说话人归一引擎与 API 测试（含事务回滚）
+│   ├── test_excerpts_api.py # 摘录包区间合并 / 收录排除 / 校注拆分校验与 API 测试
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/           # 项目列表 / 编辑器 / 三方合并 / 规则标注 / 质检 / 说话人归一
+│   │   ├── pages/           # 项目列表 / 编辑器 / 三方合并 / 规则标注 / 质检 / 说话人归一 / 摘录包
 │   │   ├── components/      # 时间轴、标注弹窗、片段表、冲突裁决卡、引语检索、发言时长
 │   │   ├── api.js  utils.js  speakingTime.js  styles.css
 │   └── vite.config.js
