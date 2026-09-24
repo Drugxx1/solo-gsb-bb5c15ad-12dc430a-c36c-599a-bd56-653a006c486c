@@ -249,6 +249,9 @@ export default function EditorPage() {
           <Link className="btn" to={`/projects/${id}/rules`}>
             ⚙️ 规则批量标注
           </Link>
+          <Link className="btn" to={`/projects/${id}/excerpts`}>
+            📦 摘录包
+          </Link>
           <button className="btn" onClick={() => importRef.current?.click()}>
             导入转写
           </button>

@@ -101,3 +101,16 @@ class SpeakerMappingIn(BaseModel):
 class SpeakerRenameRequest(BaseModel):
     """Mapping set for the speaker-normalization preview / commit."""
     mappings: list[SpeakerMappingIn] = []
+
+
+# ---------- excerpt package (摘录包) ----------
+
+class TimeRangeIn(BaseModel):
+    """One user-supplied half-open time range [start, end) in seconds."""
+    start: float = Field(ge=0)
+    end: float = Field(ge=0)
+
+
+class ExcerptRequest(BaseModel):
+    """A set of (unordered, possibly overlapping) ranges for an excerpt pack."""
+    ranges: list[TimeRangeIn] = Field(min_length=1)

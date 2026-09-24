@@ -670,3 +670,24 @@ code {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   padding-top: 6px;
 }
+
+/* ---------- excerpt package (摘录包) ---------- */
+.exc-range-table input { width: 100%; }
+.exc-time { font-variant-numeric: tabular-nums; }
+.exc-counts { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.exc-merged-from { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.exc-src-tag { margin: 0; }
+.exc-seg-list { margin: 6px 0 14px; }
+.exc-ann-grid { margin: 6px 0 14px; }
+.exc-source { margin-top: 6px; font-size: 12px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.exc-part-tag { margin-left: 4px; }
+.exc-empty-anns { margin: 4px 0 14px; }
+.exc-excluded-list { display: flex; flex-direction: column; gap: 8px; }
+.exc-excluded {
+  border-left: 4px solid var(--danger);
+  background: #fcf7f6;
+}
+.exc-excluded .hit-text { color: var(--muted); }
+.exc-reason { margin-top: 4px; font-size: 12px; color: #8f2f2f; }
+.exc-interval-ref { margin: 2px 0 4px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.exc-summary .stat-box span { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }

@@ -9,10 +9,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import db, importer, quality, quotes, rules, speakers
+from . import db, excerpts, importer, quality, quotes, rules, speakers
 from .merge import merge_documents
 from .schemas import (
     DocumentIn,
+    ExcerptRequest,
     MergeRequest,
     ProjectIn,
     ProjectUpdate,
@@ -245,6 +246,45 @@ def speaker_rename(project_id: str, payload: SpeakerRenameRequest) -> dict:
             for old, info in sorted(resolved_map.items())
         ],
     }
+
+
+# ---------- excerpt package (摘录包) ----------
+
+def _excerpt_payload(project: dict, payload: ExcerptRequest) -> dict:
+    """Build a read-only excerpt package; the saved project is untouched."""
+    try:
+        result = excerpts.build_excerpt(
+            project["document"],
+            [r.model_dump() for r in payload.ranges],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    result["projectId"] = project["id"]
+    result["projectName"] = project["name"]
+    return result
+
+
+@app.post("/api/projects/{project_id}/excerpts/preview")
+def excerpts_preview(project_id: str, payload: ExcerptRequest) -> dict:
+    """Preview an excerpt pack: merged intervals, segments, clips, excludes."""
+    return _excerpt_payload(_get_or_404(project_id), payload)
+
+
+@app.post("/api/projects/{project_id}/excerpts/download")
+def excerpts_download(project_id: str, payload: ExcerptRequest):
+    """Build and return the same package as an attachment JSON download."""
+    from urllib.parse import quote
+
+    result = _excerpt_payload(_get_or_404(project_id), payload)
+    fname = quote(f"{result['projectName']}-摘录包.json")
+    return JSONResponse(
+        content=result,
+        media_type="application/json",
+        headers={
+            "Content-Disposition":
+                f"attachment; filename=excerpt-package.json; filename*=UTF-8''{fname}"
+        },
+    )
 
 
 # ---------- rule-based batch annotation ----------

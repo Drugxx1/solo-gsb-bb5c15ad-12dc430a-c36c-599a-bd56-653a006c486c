@@ -103,4 +103,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ mappings }),
     }),
+
+  // ----- excerpt package (摘录包) -----
+  previewExcerpts: (projectId, ranges) =>
+    request(`/projects/${projectId}/excerpts/preview`, {
+      method: 'POST',
+      body: JSON.stringify({ ranges }),
+    }),
+  excerptsDownloadUrl: (projectId) =>
+    `${BASE}/projects/${projectId}/excerpts/download`,
 };
